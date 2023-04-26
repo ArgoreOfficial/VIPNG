@@ -21,7 +21,7 @@ namespace VIPNG.Physics
 
         public VIPNGModel()
         {
-            AddBone(new Vector2(400, 400), new Vector2(400, 300));
+            AddBone(new Vector2(400, 400), new Vector2(400, 230));
             _rootPosition = _bones.Last().RootPosition;
         }
 
@@ -54,8 +54,8 @@ namespace VIPNG.Physics
             Bone newBone = new Bone(
                     _bones[_selected].RootPosition, //position
                     Vector2.Zero, // offset
-                    relative.Angle() - _bones[_selected].Angle, 
-                    relative.Length(), // angle and length 
+                    relative.Angle() - _bones[_selected].Angle,
+                    MathF.Min(relative.Length(), 170), // angle and length 
                     0.5f, 0.1f, 50 // stiffness and damping
                     );
 
@@ -126,9 +126,6 @@ namespace VIPNG.Physics
         {
             for (int i = 0; i < _bones.Count; i++)
             {
-                _bones[i].Draw(sb);
-
-
                 _bones[i].DrawWire(
                     sb, 
                     (i == _selected) ? Color.DarkRed : Color.White,

@@ -92,8 +92,9 @@ namespace VIPNG
 
             _spriteBatch.Begin();
 
-            //_model.Draw(_spriteBatch);
-            _model.DrawWire(_spriteBatch);
+            _model.Draw(_spriteBatch);
+
+            if(Keyboard.GetState().IsKeyDown(Keys.LeftShift)) _model.DrawWire(_spriteBatch);
 
             _spriteBatch.End();
 

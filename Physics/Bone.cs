@@ -215,7 +215,7 @@ namespace VIPNG.Physics
                 new Rectangle(
                     (int)_rootPosition.X,
                     (int)_rootPosition.Y,
-                    (int)_length, //(int)(_texture.Width * (_length / _targetLength)),
+                    (int)(_texture.Width * (_length / _targetLength)),
                     _texture.Height),
                 new Rectangle(
                     0,
