@@ -2,8 +2,10 @@
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using NAudio.CoreAudioApi;
+using NAudio.Wave;
 using System;
 using System.Diagnostics;
+using System.Reflection;
 using VIPNG.Physics;
 
 namespace VIPNG
@@ -19,7 +21,7 @@ namespace VIPNG
 
         MouseState _mouseState;
         MouseState _previousMouseState;
-
+        Vector2 _mousePanStart;
         public Game1()
         {
             _graphics = new GraphicsDeviceManager(this);
@@ -29,23 +31,23 @@ namespace VIPNG
 
         protected override void Initialize()
         {
-
             MMDeviceEnumerator enm = new MMDeviceEnumerator();
             var devices = enm.EnumerateAudioEndPoints(DataFlow.Capture, DeviceState.Active);
 
+            Debug.WriteLine("  ----");
             foreach (var device in devices)
             {
-
-                if (device.FriendlyName.Contains("CABLE"))
+                Debug.WriteLine(device.FriendlyName);
+                if (device.FriendlyName.Contains("Mikrofon"))
                 {
-                    Debug.WriteLine("Found " + device.FriendlyName);
+                    Debug.WriteLine("   Connected to " + device.FriendlyName);
 
                     _mic = device;
                     break;
                 }
                 
             }
-
+            Debug.WriteLine("  ----");
 
             base.Initialize();
         }
@@ -61,27 +63,41 @@ namespace VIPNG
 
         protected override void Update(GameTime gameTime)
         {
+
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
                 Exit();
 
             
             MouseState();
 
-            float micVolume = MathF.Min(_mic.AudioMeterInformation.MasterPeakValue * 5, 1f);
+            float micVolume = 0;
+            if (_mic != null) micVolume = _mic.AudioMeterInformation.MasterPeakValue * 100;
+            
+            //_model.ReactRoot(MathF.Sin(((float)gameTime.TotalGameTime.TotalSeconds * 15) + 1) / 2 * micVolume * 40);
 
-            _model.ReactRoot(MathF.Sin(((float)gameTime.TotalGameTime.TotalSeconds * 15) + 1) / 2 * micVolume * 40);
-
+            //_model.ReactRoot(micVolume * -100);
+            
+            // select bone
             if(GetLeftDown())
             {
                 _model.Select(_mouseState.Position.ToVector2());
             }
+
+            // add bone
             if (GetRightDown())
             {
                 _model.AddBoneToSelected(_mouseState.Position.ToVector2());
             }
 
-            //bone.SetAngle(-0.785398163f + MathF.Sin((float)gameTime.TotalGameTime.TotalSeconds * 4) * 0.5f);
-            _model.Update(gameTime);
+            // add bone
+            if(_mouseState.MiddleButton == ButtonState.Pressed)
+            {
+                Vector2 relative = _mouseState.Position.ToVector2() - _previousMouseState.Position.ToVector2();
+                _model.MoveRoot(relative);
+            }
+
+
+            if (Keyboard.GetState().IsKeyUp(Keys.Space))  _model.Update(gameTime);
 
             base.Update(gameTime);
         }
@@ -92,9 +108,9 @@ namespace VIPNG
 
             _spriteBatch.Begin();
 
-            _model.Draw(_spriteBatch);
-
-            if(Keyboard.GetState().IsKeyDown(Keys.LeftShift)) _model.DrawWire(_spriteBatch);
+            
+            if(Keyboard.GetState().IsKeyDown(Keys.LeftShift)) _model.Draw(_spriteBatch);
+            else _model.DrawWire(_spriteBatch);
 
             _spriteBatch.End();
 
@@ -114,6 +130,10 @@ namespace VIPNG
         bool GetRightDown()
         {
             return _mouseState.RightButton == ButtonState.Pressed && _previousMouseState.RightButton != ButtonState.Pressed;
+        }
+        bool GetMiddleDown()
+        {
+            return _mouseState.MiddleButton == ButtonState.Pressed && _previousMouseState.MiddleButton != ButtonState.Pressed;
         }
     }
 }

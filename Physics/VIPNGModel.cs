@@ -12,7 +12,6 @@ namespace VIPNG.Physics
     public class VIPNGModel
     {
         List<Bone> _bones = new List<Bone>();
-        Vector2 _rootPosition;
 
         Texture2D _section;
         Texture2D _end;
@@ -22,7 +21,11 @@ namespace VIPNG.Physics
         public VIPNGModel()
         {
             AddBone(new Vector2(400, 400), new Vector2(400, 230));
-            _rootPosition = _bones.Last().RootPosition;
+        }
+
+        public void MoveRoot(Vector2 direction)
+        {
+            _bones[0].SetPosition(_bones[0].RootPosition + direction);
         }
 
         public void Load(Texture2D section, Texture2D end)
@@ -39,7 +42,7 @@ namespace VIPNG.Physics
                     rootPosition, //position
                     Vector2.Zero, // offset
                     relative.Angle(), relative.Length(), // angle and length 
-                    1f, 1f, 200 // stiffness and damping
+                    1f, 1f, 100 // stiffness and damping
                     );
 
             _bones.Add( newBone );
@@ -49,14 +52,14 @@ namespace VIPNG.Physics
         {
             if (_selected < 0) return;
 
-            Vector2 relative = tipPosition - _bones[_selected].TipPosition;
+            Vector2 relative = tipPosition - _bones[_selected].RealTipPosition;
 
             Bone newBone = new Bone(
                     _bones[_selected].RootPosition, //position
                     Vector2.Zero, // offset
                     relative.Angle() - _bones[_selected].Angle,
                     MathF.Min(relative.Length(), 170), // angle and length 
-                    0.5f, 0.1f, 50 // stiffness and damping
+                    1f, 1f, 100 // stiffness and damping
                     );
 
             newBone.SetParent(_bones[_selected]);
@@ -68,7 +71,6 @@ namespace VIPNG.Physics
             _bones[_selected].LoadTexture(_section, new Vector2(50, 30));
 
             _selected = _bones.Count - 1;
-            Debug.WriteLine(_selected);
         }
 
         public BoneData BoneToBoneData(Bone bone)
@@ -91,16 +93,16 @@ namespace VIPNG.Physics
 
             for (int i = 0; i < _bones.Count; i++)
             {
-                float distance = (_bones[i].TipPosition - mousePosition).Length();
+                float distance = (_bones[i].RealTipPosition - mousePosition).Length();
                 if (distance < closestDistance)
                 {
                     closestDistance = distance;
                     _selected = i;
-                    Debug.WriteLine("Selected " + i);
                 }
             }
 
         }
+
         public void Deselect()
         {
             _selected = -1;
@@ -110,7 +112,7 @@ namespace VIPNG.Physics
         {
             for (int i = 0; i < _bones.Count; i++)
             {
-                _bones[i].Update(gt, 100);
+                _bones[i].Update(gt, 200);
             }
         }
 
@@ -133,11 +135,6 @@ namespace VIPNG.Physics
                     (i == _selected) ? Color.Red : Color.White);
 
             }
-        }
-
-        public void ReactRoot(float amount)
-        {
-            _bones[0].SetPosition(_rootPosition + new Vector2(0, amount));
         }
     }
 }

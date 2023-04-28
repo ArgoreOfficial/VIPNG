@@ -1,6 +1,7 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using MonoGame;
+using NAudio.Wave;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -8,6 +9,7 @@ using System.Linq;
 using System.Reflection.Metadata;
 using System.Text;
 using System.Threading.Tasks;
+using VIPNG.Physics.Constraints;
 
 namespace VIPNG.Physics
 {
@@ -22,18 +24,13 @@ namespace VIPNG.Physics
         Vector2 _tipPosition;
         Vector2 _tipPreviousPosition;
         Vector2 _tipAcceleration;
-        Vector2 _tipTargetPosition;
 
         float _rootAngle = 0f;
 
-        float _length;
+        List<Constraint> _constraints = new List<Constraint>();
 
-        float _targetAngle;
-        float _targetLength;
-
-        float _stiffness;
-        float _angularStiffness;
         float _damping;
+        float _baseBoneLength; // used for texture scaling
 
         // graphics
 
@@ -43,29 +40,29 @@ namespace VIPNG.Physics
         
 
         public Vector2 RootPosition { get => _rootPosition; }
-        public Vector2 TipPosition { get => _tipPosition + _rootPosition; }
+        public Vector2 TipPosition { get => _tipPosition; }
+        public Vector2 RealTipPosition { get => _tipPosition + _rootPosition; }
         public float Angle { get => _tipPosition.Angle(); }
+        public float Length { get => _tipPosition.Length(); }
+
+        public float RootAngle { get => _rootAngle; }
 
         public Bone(Vector2 rootPosition, Vector2 rootOffset, float angle, float length, float stiffness, float angularStiffness, float damping)
         {
             _rootPosition = rootPosition;
             
-            _targetAngle = angle;
-
-            _length = length;
-            _targetLength = length;
-            
-            _stiffness = stiffness;
-            _angularStiffness = angularStiffness;
             _damping = damping;
+            _baseBoneLength = length;
 
             _tipPosition = new Vector2(
-                    MathF.Cos(_targetAngle) * _targetLength,
-                    MathF.Sin(_targetAngle) * _targetLength
+                    MathF.Cos(angle) * length,
+                    MathF.Sin(angle) * length
                 );
 
             _tipPreviousPosition = _tipPosition;
-            _tipTargetPosition = _tipPosition;
+
+            _constraints.Add(new RotationConstraint(angle, angularStiffness));
+            _constraints.Add(new LengthConstraint(length, stiffness));
         }
 
         /// <summary>
@@ -88,12 +85,12 @@ namespace VIPNG.Physics
         {
             _parentBone = bone;
             
-            SetPosition(_parentBone.TipPosition);
+            SetPosition(_parentBone.RealTipPosition);
             SetAngle(_parentBone.Angle);
 
             Vector2 targetAnglePos = new Vector2(
-                MathF.Cos(_targetAngle + _rootAngle),
-                MathF.Sin(_targetAngle + _rootAngle));
+                MathF.Cos(Angle + _rootAngle),
+                MathF.Sin(Angle + _rootAngle));
 
             float rotate = Vector2.Normalize(_tipPosition).AngleTo(targetAnglePos);
             _tipPosition = _tipPosition.Rotate(-rotate);
@@ -102,7 +99,7 @@ namespace VIPNG.Physics
 
         public BoneData ToBoneData()
         {
-            BoneData boneData = new BoneData(_rootPosition, _rootOffset, _targetAngle, _targetLength, _stiffness, _angularStiffness, _damping);
+            BoneData boneData = new BoneData(_rootPosition, _rootOffset, 0, 0, 0, 0, _damping);
             return boneData;
         }
 
@@ -126,35 +123,19 @@ namespace VIPNG.Physics
             float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
             //float deltaTime = (1f / 60f) / physicsIterations;
             if (_parentBone != null) SetAngle(_parentBone.Angle);
-            if (_parentBone != null) SetPosition(_parentBone.TipPosition);
+            if (_parentBone != null) SetPosition(_parentBone.RealTipPosition);
             
             for (int i = 0; i < physicsIterations; i++)
             {
-                UpdateLength(deltaTime, physicsIterations);
-                UpdateAngle(deltaTime, physicsIterations);
+                for (int c = 0; c < _constraints.Count; c++)
+                {
+                    _tipPosition = _constraints[c].GetUpdatedTipPosition(this, deltaTime, physicsIterations);
+                }
+
                 TickPosition(deltaTime, physicsIterations);
             }
         }
 
-
-        void UpdateAngle(float deltaTime, int physicsIterations)
-        {
-            Vector2 targetAnglePos = new Vector2(
-                MathF.Cos(_targetAngle + _rootAngle), 
-                MathF.Sin(_targetAngle + _rootAngle));
-
-            float rotate = Vector2.Normalize(_tipPosition).AngleTo(targetAnglePos) * (_angularStiffness / physicsIterations) * deltaTime;            
-            _tipPosition = _tipPosition.Rotate(-rotate);
-
-        }
-
-        void UpdateLength(float deltaTime, int physicsIterations)
-        {
-            _length = _tipPosition.Length();
-            
-            Vector2 move = Vector2.Normalize(_tipPosition) * (_targetLength - _length) * (_stiffness / physicsIterations) * deltaTime;
-            _tipPosition += move;
-        }
 
         void TickPosition(float deltaTime, int physicsIterations)
         {
@@ -188,6 +169,7 @@ namespace VIPNG.Physics
             _tipPreviousPosition += relative;
 
             _rootPosition = position;
+            
         }
 
         public void SetAngle(float angle)
@@ -195,11 +177,13 @@ namespace VIPNG.Physics
             _rootAngle = angle;
         }
 
+        /*
         public void LookAt(Vector2 position)
         {
             Vector2 relative = position - _rootPosition;
             _targetAngle = relative.Angle() - _rootAngle;
         }
+        */
 
         #endregion
 
@@ -215,7 +199,7 @@ namespace VIPNG.Physics
                 new Rectangle(
                     (int)_rootPosition.X,
                     (int)_rootPosition.Y,
-                    (int)(_texture.Width * (_length / _targetLength)),
+                    (int)(_texture.Width * (Length / _baseBoneLength)),
                     _texture.Height),
                 new Rectangle(
                     0,
