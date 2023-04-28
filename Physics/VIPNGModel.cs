@@ -18,59 +18,17 @@ namespace VIPNG.Physics
 
         int _selected = -1;
 
+        public List<Bone> Bones { get => _bones; }
+
         public VIPNGModel()
         {
-            AddBone(new Vector2(400, 400), new Vector2(400, 230));
-        }
-
-        public void MoveRoot(Vector2 direction)
-        {
-            _bones[0].SetPosition(_bones[0].RootPosition + direction);
+            
         }
 
         public void Load(Texture2D section, Texture2D end)
         {
             _section = section;
             _end = end;
-        }
-
-        public void AddBone(Vector2 rootPosition, Vector2 tipPosition)
-        {
-            Vector2 relative = tipPosition - rootPosition;
-
-            Bone newBone = new Bone(
-                    rootPosition, //position
-                    Vector2.Zero, // offset
-                    relative.Angle(), relative.Length(), // angle and length 
-                    1f, 1f, 100 // stiffness and damping
-                    );
-
-            _bones.Add( newBone );
-        }
-
-        public void AddBoneToSelected(Vector2 tipPosition)
-        {
-            if (_selected < 0) return;
-
-            Vector2 relative = tipPosition - _bones[_selected].RealTipPosition;
-
-            Bone newBone = new Bone(
-                    _bones[_selected].RootPosition, //position
-                    Vector2.Zero, // offset
-                    relative.Angle() - _bones[_selected].Angle,
-                    MathF.Min(relative.Length(), 170), // angle and length 
-                    1f, 1f, 100 // stiffness and damping
-                    );
-
-            newBone.SetParent(_bones[_selected]);
-
-            newBone.LoadTexture(_end, new Vector2(23, 70));
-
-            _bones.Add( newBone );
-
-            _bones[_selected].LoadTexture(_section, new Vector2(50, 30));
-
-            _selected = _bones.Count - 1;
         }
 
         public BoneData BoneToBoneData(Bone bone)
@@ -86,9 +44,88 @@ namespace VIPNG.Physics
             return data;
         }
 
-        public void Select(Vector2 mousePosition)
+        public void MoveSelectedRoot(Vector2 direction)
         {
-            float closestDistance = 30f;
+            if (_selected < 0) return;
+
+            _bones[_selected].MoveRoot(direction);
+        }
+
+        public void MoveSelectedTip(Vector2 direction, bool lengthOnly = false, bool angleOnly = false)
+        {
+            if (_selected < 0) return;
+
+            _bones[_selected].MoveTip(direction, lengthOnly, angleOnly);
+        }
+
+
+        public void AddBone(Vector2 rootPosition, Vector2 tipPosition)
+        {
+            Vector2 relative = tipPosition - rootPosition;
+
+            Bone newBone = new Bone(
+                    rootPosition, //position
+                    relative.Angle(), // angle 
+                    relative.Length(), // length 
+                    100 // damping
+                    );
+            
+            newBone.LoadTexture(_section, new Vector2(50, 30));
+
+            _bones.Add(newBone);
+        }
+
+        public void AddBoneToSelected(Vector2 tipPosition)
+        {
+            if (_selected < 0) return;
+
+            Vector2 relative = tipPosition - _bones[_selected].RealTipPosition;
+
+            Bone newBone = new Bone(
+                    _bones[_selected].RootPosition, //position
+                    relative.Angle() - _bones[_selected].Angle - _bones[_selected].TipAngle, // angle
+                    relative.Length(), // length
+                    100 // damping
+                    );
+
+            newBone.SetConstraints(
+                relative.Length(),
+                relative.Length(),
+                1f,
+                relative.Angle() - _bones[_selected].Angle - _bones[_selected].TipAngle,
+                relative.Angle() - _bones[_selected].Angle - _bones[_selected].TipAngle,
+                0.1f);
+            newBone.SetParent(_bones[_selected]);
+
+            newBone.LoadTexture(_end, new Vector2(23, 70));
+
+            _bones.Add(newBone);
+
+            _bones[_selected].LoadTexture(_section, new Vector2(50, 30));
+
+            _selected = _bones.Count - 1;
+        }
+
+        public void RemoveSelected()
+        {
+            if (_selected < 0) return;
+
+            for (int i = 0; i < _bones.Count; i++)
+            {
+                if (_bones[i].GetParent() == _bones[_selected])
+                {
+                    _bones[i].SetParent(null);
+                }
+            }
+
+            _bones.RemoveAt(_selected);
+            _selected = -1;
+        }
+
+
+        public void TrySelect(Vector2 mousePosition)
+        {
+            float closestDistance = 50f;
             Deselect();
 
             for (int i = 0; i < _bones.Count; i++)
@@ -100,7 +137,6 @@ namespace VIPNG.Physics
                     _selected = i;
                 }
             }
-
         }
 
         public void Deselect()
@@ -108,19 +144,21 @@ namespace VIPNG.Physics
             _selected = -1;
         }
 
-        public void Update(GameTime gt)
+        // basic loops
+
+        public void Update(GameTime gt, bool isRigid, float responseAmount)
         {
             for (int i = 0; i < _bones.Count; i++)
             {
-                _bones[i].Update(gt, 200);
+                _bones[i].Update(gt, isRigid, responseAmount);
             }
         }
 
-        public void Draw(SpriteBatch sb)
+        public void Draw(SpriteBatch sb, float alpha)
         {
             for (int i = 0; i < _bones.Count; i++)
             {
-                _bones[i].Draw(sb);
+                _bones[i].Draw(sb, alpha);
             }
         }
 

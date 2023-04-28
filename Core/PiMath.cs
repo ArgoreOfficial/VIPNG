@@ -30,7 +30,7 @@ public static class PiMath
         return (float)Math.Atan2(
             other.X * v.Y - other.Y * v.X, 
             other.X * v.X + other.Y * v.Y);
-
     }
+
 }
 

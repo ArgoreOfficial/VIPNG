@@ -22,10 +22,9 @@ namespace VIPNG.Physics
         Vector2 _rootPosition;
         Vector2 _rootOffset;
         Vector2 _tipPosition;
-        Vector2 _tipPreviousPosition;
-        Vector2 _tipAcceleration;
 
         float _rootAngle = 0f;
+        float _tipAngle = 0f;
 
         List<Constraint> _constraints = new List<Constraint>();
 
@@ -42,12 +41,13 @@ namespace VIPNG.Physics
         public Vector2 RootPosition { get => _rootPosition; }
         public Vector2 TipPosition { get => _tipPosition; }
         public Vector2 RealTipPosition { get => _tipPosition + _rootPosition; }
+        public Vector2 Center { get => (_rootPosition + _rootPosition + _tipPosition) / 2; }
         public float Angle { get => _tipPosition.Angle(); }
         public float Length { get => _tipPosition.Length(); }
-
         public float RootAngle { get => _rootAngle; }
+        public float TipAngle { get => _tipAngle; }
 
-        public Bone(Vector2 rootPosition, Vector2 rootOffset, float angle, float length, float stiffness, float angularStiffness, float damping)
+        public Bone(Vector2 rootPosition, float angle, float length, float damping)
         {
             _rootPosition = rootPosition;
             
@@ -59,10 +59,15 @@ namespace VIPNG.Physics
                     MathF.Sin(angle) * length
                 );
 
-            _tipPreviousPosition = _tipPosition;
+            _constraints.Add(new AngleConstraint(angle, 0.1f));
+            _constraints.Add(new LengthConstraint(length, 0.9f));
+        }
 
-            _constraints.Add(new RotationConstraint(angle, angularStiffness));
-            _constraints.Add(new LengthConstraint(length, stiffness));
+        public void SetConstraints(float length, float responseLength, float stiffness, float angle, float responseAngle, float angularStiffness)
+        {
+            _baseBoneLength = length;
+            _constraints[0] = new AngleConstraint(angle, responseAngle, angularStiffness);
+            _constraints[1] = new LengthConstraint(length, responseLength, stiffness);
         }
 
         /// <summary>
@@ -71,11 +76,8 @@ namespace VIPNG.Physics
         /// <param name="boneData"></param>
         public Bone(BoneData boneData) : this(
             boneData.Position, 
-            boneData.Offset, 
             boneData.TargetAngle, 
             boneData.TargetLength, 
-            boneData.Stiffness, 
-            boneData.AngularStiffness, 
             boneData.Damping) 
         {
             
@@ -84,9 +86,10 @@ namespace VIPNG.Physics
         public void SetParent(Bone bone)
         {
             _parentBone = bone;
-            
-            SetPosition(_parentBone.RealTipPosition);
-            SetAngle(_parentBone.Angle);
+            if (bone == null) return;
+
+            _rootPosition = _parentBone.RealTipPosition;
+            _rootAngle = _parentBone.Angle;
 
             Vector2 targetAnglePos = new Vector2(
                 MathF.Cos(Angle + _rootAngle),
@@ -94,7 +97,6 @@ namespace VIPNG.Physics
 
             float rotate = Vector2.Normalize(_tipPosition).AngleTo(targetAnglePos);
             _tipPosition = _tipPosition.Rotate(-rotate);
-            _tipPreviousPosition = _tipPosition;
         }
 
         public BoneData ToBoneData()
@@ -115,81 +117,88 @@ namespace VIPNG.Physics
             return _parentBone;
         }
 
-
         #region UPDATE
 
-        public void Update(GameTime gameTime, int physicsIterations)
+        public void Update(GameTime gameTime, bool isRigid, float responseAmount)
         {
             float deltaTime = (float)gameTime.ElapsedGameTime.TotalSeconds;
-            //float deltaTime = (1f / 60f) / physicsIterations;
-            if (_parentBone != null) SetAngle(_parentBone.Angle);
-            if (_parentBone != null) SetPosition(_parentBone.RealTipPosition);
             
-            for (int i = 0; i < physicsIterations; i++)
+            if (_parentBone != null)
             {
-                for (int c = 0; c < _constraints.Count; c++)
-                {
-                    _tipPosition = _constraints[c].GetUpdatedTipPosition(this, deltaTime, physicsIterations);
-                }
-
-                TickPosition(deltaTime, physicsIterations);
+                _rootAngle = _parentBone.Angle + _parentBone.TipAngle;
             }
-        }
 
-
-        void TickPosition(float deltaTime, int physicsIterations)
-        {
-            Vector2 positionCopy = _tipPosition;
-            _tipPosition += (_tipPosition - _tipPreviousPosition) + (deltaTime * deltaTime) * _tipAcceleration / 1;
-            _tipPreviousPosition = positionCopy;
-
-            // damping
-            _tipAcceleration = (_tipPreviousPosition - _tipPosition) * (_damping / 1);
+            if (_parentBone != null)
+            {
+                Vector2 relative = _parentBone.RealTipPosition - _rootPosition;
+                _tipPosition -= relative;
+                _rootPosition += relative;
+            }
+            
+            for (int c = 0; c < _constraints.Count; c++)
+            {
+                _tipPosition = _constraints[c].GetUpdatedTipPosition(this, isRigid);
+                _constraints[c].InterpolateKeyframeTarget(MathHelper.Clamp(responseAmount, -1, 1));
+            }   
         }
 
         #endregion
 
         #region SET
 
-        public void SetAcceleration(Vector2 acceleration)
+        public void SetRootPosition(Vector2 position)
         {
-            _tipAcceleration = acceleration;
+            MoveRoot(position - _rootPosition); 
         }
 
-        public void SetAcceleration(Vector2 position, float strength)
+        public void MoveRoot(Vector2 direction)
         {
-            _tipAcceleration = Vector2.Normalize(position - _rootPosition - _tipPosition) * strength;
+            if (_parentBone != null) _parentBone.MoveTip(direction);
+            else _rootPosition += direction;
+
+            //MoveTip(-direction);
         }
 
-
-        public void SetPosition(Vector2 position)
+        public void SetTipPosition(Vector2 position)
         {
-            Vector2 relative = _rootPosition - position;
-            _tipPosition += relative;
-            _tipPreviousPosition += relative;
+            MoveTip(_rootPosition - position);
+        }
 
-            _rootPosition = position;
+        public void MoveTip(Vector2 direction, bool lengthOnly = false, bool angleOnly = false)
+        {
+            // move tip position
+            _tipPosition += direction;
+
+            if(!angleOnly)
+            {
+                // get old length 
+                LengthConstraint length = (LengthConstraint)_constraints.First(c => c is LengthConstraint);
+
+                // set length
+                ((LengthConstraint)_constraints[_constraints.IndexOf(length)]).SetNewLength(_tipPosition.Length());
+                _baseBoneLength = length.TargetLength;
+            }
+            if(!lengthOnly)
+            {
+                // set new bone angle
+                float newAngle = _tipPosition.Angle() - RootAngle; // new angle of bone
+
+                AngleConstraint angle = (AngleConstraint)_constraints.First(c => c is AngleConstraint);
             
-        }
+                float oldAngle = angle.TargetAngle;
+            
+                // set the new angle
+                ((AngleConstraint)_constraints[_constraints.IndexOf(angle)]).SetNewAngle(newAngle);
 
-        public void SetAngle(float angle)
-        {
-            _rootAngle = angle;
+                _tipAngle += oldAngle - newAngle;
+            }
         }
-
-        /*
-        public void LookAt(Vector2 position)
-        {
-            Vector2 relative = position - _rootPosition;
-            _targetAngle = relative.Angle() - _rootAngle;
-        }
-        */
 
         #endregion
 
         #region DRAWING
 
-        public void Draw(SpriteBatch spriteBatch)
+        public void Draw(SpriteBatch spriteBatch, float alpha)
         {
             if (_texture == null) return;
 
@@ -206,7 +215,7 @@ namespace VIPNG.Physics
                     0,
                     _texture.Width,
                     _texture.Height),
-                Color.White,
+                Color.White * alpha,
                 angle + _textureAngle,
                 _textureOrigin,
                 SpriteEffects.None, 0f);

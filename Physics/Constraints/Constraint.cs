@@ -9,6 +9,8 @@ namespace VIPNG.Physics.Constraints
 {
     public abstract class Constraint
     {
-        public abstract Vector2 GetUpdatedTipPosition(Bone bone, float deltaTime, int physicsIterations);
+        protected bool _responsive = false;
+        public abstract Vector2 GetUpdatedTipPosition(Bone bone, bool isRigid);
+        public abstract void InterpolateKeyframeTarget(float amount);
     }
 }
