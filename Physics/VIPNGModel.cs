@@ -19,6 +19,7 @@ namespace VIPNG.Physics
         int _selected = -1;
 
         public List<Bone> Bones { get => _bones; }
+        public Bone SelectedBone { get => _selected < 0 ? null : _bones[_selected]; }
 
         public VIPNGModel()
         {

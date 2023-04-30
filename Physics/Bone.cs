@@ -20,7 +20,6 @@ namespace VIPNG.Physics
         Bone _parentBone;
 
         Vector2 _rootPosition;
-        Vector2 _rootOffset;
         Vector2 _tipPosition;
 
         float _rootAngle = 0f;
@@ -29,7 +28,7 @@ namespace VIPNG.Physics
         List<Constraint> _constraints = new List<Constraint>();
 
         float _damping;
-        float _baseBoneLength; // used for texture scaling
+        float _restingBoneLength; // used for texture scaling
 
         // graphics
 
@@ -42,17 +41,24 @@ namespace VIPNG.Physics
         public Vector2 TipPosition { get => _tipPosition; }
         public Vector2 RealTipPosition { get => _tipPosition + _rootPosition; }
         public Vector2 Center { get => (_rootPosition + _rootPosition + _tipPosition) / 2; }
-        public float Angle { get => _tipPosition.Angle(); }
-        public float Length { get => _tipPosition.Length(); }
+
         public float RootAngle { get => _rootAngle; }
         public float TipAngle { get => _tipAngle; }
+        public float RestingAngle { get => ((AngleConstraint)_constraints[0]).RestingAngle; }
+        public float Angle { get => _tipPosition.Angle(); }
+        public float TargetAngle { get => ((AngleConstraint)_constraints[0]).KeyframeTargetAngle; }
+        
+        public float RestingLength { get => _restingBoneLength; }
+        public float Length { get => _tipPosition.Length(); }
+        public float TargetLength { get => ((LengthConstraint)_constraints[1]).KeyframeTargetLength; }
+
 
         public Bone(Vector2 rootPosition, float angle, float length, float damping)
         {
             _rootPosition = rootPosition;
             
             _damping = damping;
-            _baseBoneLength = length;
+            _restingBoneLength = length;
 
             _tipPosition = new Vector2(
                     MathF.Cos(angle) * length,
@@ -65,7 +71,7 @@ namespace VIPNG.Physics
 
         public void SetConstraints(float length, float responseLength, float stiffness, float angle, float responseAngle, float angularStiffness)
         {
-            _baseBoneLength = length;
+            _restingBoneLength = length;
             _constraints[0] = new AngleConstraint(angle, responseAngle, angularStiffness);
             _constraints[1] = new LengthConstraint(length, responseLength, stiffness);
         }
@@ -101,7 +107,7 @@ namespace VIPNG.Physics
 
         public BoneData ToBoneData()
         {
-            BoneData boneData = new BoneData(_rootPosition, _rootOffset, 0, 0, 0, 0, _damping);
+            BoneData boneData = new BoneData(_rootPosition, 0, 0, 0, 0, _damping);
             return boneData;
         }
 
@@ -171,27 +177,44 @@ namespace VIPNG.Physics
 
             if(!angleOnly)
             {
-                // get old length 
-                LengthConstraint length = (LengthConstraint)_constraints.First(c => c is LengthConstraint);
-
-                // set length
-                ((LengthConstraint)_constraints[_constraints.IndexOf(length)]).SetNewLength(_tipPosition.Length());
-                _baseBoneLength = length.TargetLength;
+                SetLength(_tipPosition.Length());
             }
             if(!lengthOnly)
             {
-                // set new bone angle
-                float newAngle = _tipPosition.Angle() - RootAngle; // new angle of bone
-
-                AngleConstraint angle = (AngleConstraint)_constraints.First(c => c is AngleConstraint);
-            
-                float oldAngle = angle.TargetAngle;
-            
-                // set the new angle
-                ((AngleConstraint)_constraints[_constraints.IndexOf(angle)]).SetNewAngle(newAngle);
-
-                _tipAngle += oldAngle - newAngle;
+                SetAngle(_tipPosition.Angle() - RootAngle);
             }
+        }
+
+        public void SetAngle(float newAngle)
+        {
+            // set new bone angle
+            
+            AngleConstraint angle = (AngleConstraint)_constraints.First(c => c is AngleConstraint);
+            
+            float oldAngle = angle.TargetAngle;
+            
+            // set the new angle
+            ((AngleConstraint)_constraints[_constraints.IndexOf(angle)]).SetNewAngle(newAngle);
+
+            _tipAngle += oldAngle - newAngle;
+
+        }
+
+        public void SetLength(float newLength)
+        {
+            // get old length 
+            LengthConstraint length = (LengthConstraint)_constraints.First(c => c is LengthConstraint);
+
+            // set length
+            length.SetNewLength(newLength);
+            _restingBoneLength = newLength;
+        }
+
+        public void UpdateConstraints(float newLength, float newAngle)
+        {
+            LengthConstraint length = (LengthConstraint)_constraints.First(c => c is LengthConstraint);
+            AngleConstraint angle = (AngleConstraint)_constraints.First(c => c is AngleConstraint);
+            SetConstraints(length.RestingTargetLength, newLength, length.Stiffness, angle.RestingAngle, newAngle, angle.Stiffness);
         }
 
         #endregion
@@ -208,7 +231,7 @@ namespace VIPNG.Physics
                 new Rectangle(
                     (int)_rootPosition.X,
                     (int)_rootPosition.Y,
-                    (int)(_texture.Width * (Length / _baseBoneLength)),
+                    (int)(_texture.Width * (Length / _restingBoneLength)),
                     _texture.Height),
                 new Rectangle(
                     0,

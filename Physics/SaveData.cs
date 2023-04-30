@@ -11,7 +11,6 @@ namespace VIPNG.Physics
     public struct BoneData
     {
         public Vector2 Position;
-        public Vector2 Offset;
         public float TargetAngle;
         public float TargetLength;
 
@@ -21,10 +20,9 @@ namespace VIPNG.Physics
 
         public int ParentID;
 
-        public BoneData(Vector2 position, Vector2 offset, float targetAngle, float targetLength, float stiffness, float angularStiffness, float damping)
+        public BoneData(Vector2 position, float targetAngle, float targetLength, float stiffness, float angularStiffness, float damping)
         {
             Position = position;
-            Offset = offset;
             TargetAngle = targetAngle;
             TargetLength = targetLength;
             Stiffness = stiffness;

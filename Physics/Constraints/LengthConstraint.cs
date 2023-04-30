@@ -18,6 +18,7 @@ namespace VIPNG.Physics.Constraints
         public float Stiffness { get => _stiffness; }
         public float TargetLength { get => _targetLength; set => _targetLength = value; }
         public float KeyframeTargetLength { get => _keyframeTargetLength; }
+        public float RestingTargetLength { get => _baseTargetLength; set => _baseTargetLength = value; }
 
         public LengthConstraint(float targetLength, float keyframeTargetLength, float stiffness)
         {
@@ -38,12 +39,7 @@ namespace VIPNG.Physics.Constraints
             _length = length;
 
             // set response length
-            if(_responsive)
-            {
-                float diff = _keyframeTargetLength / _targetLength;
-                _keyframeTargetLength = length * diff;
-            }
-            else
+            if(!_responsive)
             {
                 _keyframeTargetLength = length;
             }

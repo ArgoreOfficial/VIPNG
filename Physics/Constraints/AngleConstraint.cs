@@ -10,7 +10,7 @@ namespace VIPNG.Physics.Constraints
 {
     public class AngleConstraint : Constraint
     {
-        float _baseTargetAngle;
+        float _restingAngle;
         float _targetAngle;
         float _keyframeTargetAngle;
         float _stiffness;
@@ -18,10 +18,11 @@ namespace VIPNG.Physics.Constraints
         public float Stiffness { get => _stiffness; }
         public float TargetAngle { get => _targetAngle; }
         public float KeyframeTargetAngle { get => _keyframeTargetAngle; }
+        public float RestingAngle { get => _restingAngle; set => _restingAngle = value; }
 
         public AngleConstraint(float targetAngle, float keyframeTargetAngle, float stiffness)
         {
-            _baseTargetAngle = targetAngle;
+            _restingAngle = targetAngle;
             _targetAngle = targetAngle;
             _keyframeTargetAngle = keyframeTargetAngle;
             if (targetAngle != keyframeTargetAngle) _responsive = true;
@@ -33,16 +34,11 @@ namespace VIPNG.Physics.Constraints
 
         public void SetNewAngle(float angle)
         {
-            _baseTargetAngle = angle;
+            _restingAngle = angle;
             _targetAngle = angle;
             
             // set response length
-            if (_responsive)
-            {
-                float diff = _keyframeTargetAngle / _targetAngle;
-                _keyframeTargetAngle = angle * diff;
-            }
-            else
+            if (!_responsive)
             {
                 _keyframeTargetAngle = angle;
             }
@@ -62,7 +58,7 @@ namespace VIPNG.Physics.Constraints
         {
             if (!_responsive) return;
 
-            _targetAngle = MathHelper.Lerp(_baseTargetAngle, _keyframeTargetAngle, amount);
+            _targetAngle = MathHelper.Lerp(_restingAngle, _keyframeTargetAngle, amount);
         }
     }
 }
